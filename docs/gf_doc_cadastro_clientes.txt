@@ -1,0 +1,7 @@
+Esse job faz o processamento da base gf_tb_spec_cadastro_clientes_varejo
+
+Ele processa para todos os segmentos (PF e PJ).
+
+Para PF (IU, UD, IP, PD e IA) ele captura da base contrato_contas_jq8 os insumos.
+
+Para PJ (EP, EB, ET, RB, RP, RT) ele captura da super_cadastro os insumos.
