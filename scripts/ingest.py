@@ -2,9 +2,7 @@ import os
 import chromadb
 
 from sentence_transformers import SentenceTransformer
-
-CHROMA_PATH = "./db"
-DOCS_FOLDER = "./docs"
+from backend.config import CHROMA_DB_PATH, DOCS_PATH
 
 CHUNK_SIZE = 800
 CHUNK_OVERLAP = 100
@@ -14,7 +12,7 @@ model = SentenceTransformer(
 )
 
 client = chromadb.PersistentClient(
-    path=CHROMA_PATH
+    path=CHROMA_DB_PATH
 )
 
 collection = client.get_or_create_collection(
@@ -43,13 +41,13 @@ def chunk_text(text, chunk_size=800, overlap=100):
 
 total_chunks = 0
 
-for file in os.listdir(DOCS_FOLDER):
+for file in os.listdir(DOCS_PATH):
 
     if not file.endswith(".txt"):
         continue
 
     filepath = os.path.join(
-        DOCS_FOLDER,
+        DOCS_PATH,
         file
     )
 

@@ -1,0 +1,112 @@
+<!DOCTYPE html><html class="dark" lang="pt-BR" style=""><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<script src="js/tailwind-config-chat.js"></script>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;600;700;800&amp;family=Inter:wght@400;600;700&amp;family=JetBrains+Mono:wght@400;700&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<style>
+    #chat-session::-webkit-scrollbar { display: none; }
+    #chat-session { scrollbar-width: none; -ms-overflow-style: none; }
+</style>
+</head>
+<body class="bg-background text-on-background font-body-md overflow-hidden h-screen flex justify-center">
+<div class="fixed inset-0 interference-bg opacity-30 pointer-events-none" id="ui-background">
+<div class="absolute inset-0" style="background: radial-gradient(circle at 50% 50%, rgba(255, 107, 0, 0.05) 0%, transparent 70%);"></div>
+<canvas class="absolute inset-0 z-0" id="particles"></canvas>
+<div class="scan-line"></div>
+<div class="code-fragment" style="top: 10%; left: 5%; transform: translate(0.5745px, 0.627px);">0x7F 0x45 0x4C 0x46</div>
+<div class="code-fragment" style="top: 80%; left: 85%; transform: translate(1.149px, 1.254px);">sys_call_64</div>
+<div class="code-fragment" style="top: 40%; left: 90%; transform: translate(1.7235px, 1.881px);">VIGILANTE_PROT_V3</div>
+<div class="code-fragment" style="top: 60%; left: 3%; transform: translate(2.298px, 2.508px);">SEG_FAULT_DETECTED</div>
+</div>
+<button class="fixed top-5 right-5 w-8 h-8 flex items-center justify-center text-[#666] hover:text-primary-container transition-colors z-50 text-xl" id="close-btn">✕</button>
+<main class="w-full max-w-[1440px] mx-auto flex flex-col relative z-10 px-[26.4px] md:px-[107.52px]">
+<!-- TopAppBar -->
+<header class="flex justify-between items-center w-full bg-background/50 backdrop-blur-sm z-30 py-6">
+<div class="flex items-center gap-4">
+<img alt="GF Brain Logo" class="w-16 h-16 object-contain" src="assets/logo.png">
+<span class="font-display-xl text-[24px] font-extrabold tracking-tighter text-primary">GF BRAIN</span>
+<span class="text-outline/50 mx-2">|</span>
+<button class="bg-primary-container/10 text-primary px-4 py-2 font-label-caps text-[13px] hover:bg-primary-container/20 hover:shadow-[0_0_12px_rgba(255,102,0,0.25)] transition-all flex items-center gap-2 scale-[0.95]" onclick="window.location.reload()">
+<span class="material-symbols-outlined text-[16px]" data-icon="add">add</span>Novo Chat
+            </button>
+</div>
+<div></div>
+</header>
+<!-- Initial State -->
+<div class="flex-1 flex flex-col items-center justify-center py-gutter" id="initial-state">
+<div class="max-w-max-width-chat w-full flex flex-col items-center space-y-12">
+<div class="flex items-center gap-8 px-6 py-2 bg-surface-container-low font-label-caps text-[13.2px]">
+<div class="text-primary">Selecione um escopo para começar</div>
+</div>
+<div class="grid grid-cols-2 md:grid-cols-4 gap-4 w-full">
+<button class="scope-btn group relative border border-outline-variant bg-surface p-4 flex flex-col gap-2 transition-all hover:border-primary-container active:scale-95 items-center justify-center">
+<div class="flex justify-between items-center">
+<span class="material-symbols-outlined text-primary group-hover:scale-110 transition-transform" data-icon="code">code</span>
+</div>
+<span class="font-label-caps text-on-surface text-[11px] mt-2">Criar Código</span>
+</button>
+<button class="scope-btn group relative border border-outline-variant bg-surface p-4 flex flex-col gap-2 transition-all hover:border-primary-container active:scale-95 items-center justify-center">
+<div class="flex justify-between items-center">
+<span class="material-symbols-outlined text-on-surface-variant group-hover:text-primary transition-colors" data-icon="architecture">architecture</span>
+</div>
+<span class="font-label-caps text-on-surface-variant text-[11px] mt-2">Analisar Arquitetura</span>
+</button>
+<button class="scope-btn group relative border border-outline-variant bg-surface p-4 flex flex-col gap-2 transition-all hover:border-primary-container active:scale-95 items-center justify-center">
+<div class="flex justify-between items-center">
+<span class="material-symbols-outlined text-on-surface-variant group-hover:text-primary transition-colors" data-icon="description">description</span>
+</div>
+<span class="font-label-caps text-on-surface-variant text-[11px] mt-2">Documentação</span>
+</button>
+<button class="scope-btn group relative border border-outline-variant bg-surface p-4 flex flex-col gap-2 transition-all hover:border-primary-container active:scale-95 items-center justify-center">
+<div class="flex justify-between items-center">
+<span class="material-symbols-outlined text-on-surface-variant group-hover:text-primary transition-colors" data-icon="bolt">bolt</span>
+</div>
+<span class="font-label-caps text-on-surface-variant text-[11px] mt-2">Automações</span>
+</button>
+</div>
+<div class="w-full relative transition-all duration-700 ease-in-out" id="input-container">
+<div class="relative group">
+<div class="absolute -inset-0.5 bg-primary-container transition duration-300 backdrop-blur-sm opacity-30"></div>
+<div class="relative border border-outline-variant group-focus-within:border-primary p-1 bg-[rgba(19,19,19,0.55)]">
+<textarea class="w-full bg-transparent border-none text-on-surface placeholder:text-on-surface-variant/40 font-code-sm text-[18px] p-6 focus:ring-0 resize-none min-h-[80px]" id="main-input" placeholder="Como funciona a migracao de clientes no GF?" rows="1"></textarea>
+<div class="flex justify-between items-center px-4 pb-4">
+<div></div>
+<button class="w-12 h-12 rounded-none text-on-primary font-label-caps flex items-center justify-center bg-primary-container hover:shadow-[0_0_20px_#ff6600] disabled:opacity-30 disabled:cursor-not-allowed" id="submit-btn">
+<span class="material-symbols-outlined text-[24px]" data-icon="send">send</span>
+</button>
+</div>
+</div>
+</div>
+<div class="mt-4 flex justify-center gap-6 font-label-caps text-[10px] text-on-surface-variant uppercase tracking-widest">
+<span class="">[W + Seta pra cima ou pra baixo pra maximizar ou minimizar a tela]</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Chat Session -->
+<div class="hidden flex-1 overflow-y-auto space-y-8 pb-8 max-w-max-width-chat mx-auto w-full" id="chat-session">
+<div>
+<!-- Messages will be injected here -->
+</div>
+</div>
+<!-- Sticky Bottom Bar -->
+<div class="hidden border-t border-primary/30 py-4 transition-transform duration-500 max-w-max-width-chat mx-auto w-full" id="bottom-bar">
+<div class="flex items-center gap-4">
+<div class="flex-1 relative bg-background border border-outline-variant group-focus-within:border-primary flex items-center px-4">
+<input class="flex-1 bg-transparent border-none text-on-surface placeholder:text-on-surface-variant/40 font-code-sm text-sm py-3 focus:ring-0" id="secondary-input" placeholder="ENVIAR MENSAGEM..." type="text">
+<button class="text-on-primary bg-primary-container disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center w-10 h-10" id="secondary-submit">
+<span class="material-symbols-outlined text-[20px]" data-icon="send">send</span>
+</button>
+</div>
+</div>
+</div>
+</main>
+<script src="js/particles.js"></script>
+<script src="js/app.js"></script>
+<script src="js/chat.js"></script>
+
+
+</body></html>

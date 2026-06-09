@@ -1,2 +1,32 @@
 .venv\Scripts\activate
-uvicorn api:app --reload
+uvicorn backend.api:app --reload
+
+
+# ==========================================
+# LLM PROVIDER
+# ==========================================
+# Escolha: "openai" (NVIDIA) ou "bedrock" (Claude via AWS)
+LLM_PROVIDER=openai
+
+# ==========================================
+# OPENAI (NVIDIA) - usado quando LLM_PROVIDER=openai
+# ==========================================
+NVIDIA_API_KEY=
+LLM_MODEL=meta/llama-3.2-3b-instruct
+
+# ==========================================
+# BEDROCK (AWS) - usado quando LLM_PROVIDER=bedrock
+# Descomente e preencha quando for usar
+# ==========================================
+# AWS_PROFILE=
+# AWS_REGION=
+# BEDROCK_MODEL_ID=
+# AWS_CA_BUNDLE=
+# HTTP_PROXY=
+# HTTPS_PROXY=
+
+# ==========================================
+# PATHS
+# ==========================================
+CHROMA_DB_PATH=data/db
+DOCS_PATH=data/docs

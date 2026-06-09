@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html class="dark" lang="pt-BR"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>GF BRAIN | Super Agent</title>
+<script src="js/tailwind-config.js"></script>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;600;700;800&amp;family=Inter:wght@400;600;700&amp;family=JetBrains+Mono:wght@400;700&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body class="font-body-md text-body-md selection:bg-primary-container selection:text-white">
+<!-- Background Elements -->
+<div class="fixed inset-0">
+<div class="particle-bg hero-gradient"></div>
+<canvas class="absolute inset-0" id="particles"></canvas>
+</div>
+<!-- Close Button -->
+<!-- Intro Overlay -->
+<div class="fixed inset-0 bg-black z-[9999] flex flex-col items-center justify-center transition-opacity duration-700" id="intro">
+<canvas class="absolute inset-0 pointer-events-none" id="intro-particles"></canvas>
+<div class="relative z-10 flex flex-col items-center opacity-0 transition-opacity duration-[4000ms]" id="intro-content">
+<img alt="GF Brain Logo" class="w-64 h-64 object-contain" src="assets/logo.png">
+<h1 class="text-5xl font-bold text-primary mt-8 tracking-tighter">GF BRAIN</h1>
+<p class="text-on-surface-variant font-code-block opacity-60 tracking-widest text-sm md:text-base mt-4">
+                SUPER AGENT ARCHITECTURE v1.0.0
+</p>
+</div>
+</div>
+<button class="fixed top-5 right-5 w-8 h-8 flex items-center justify-center text-[#666] hover:text-primary-container transition-colors z-[10000] text-xl" id="close-btn">✕</button>
+<!-- Main Content -->
+<main class="relative min-h-screen flex items-center justify-center overflow-hidden z-10 opacity-0 transition-opacity duration-700" id="main-content">
+<div class="flex flex-col items-center space-y-10 w-full">
+<!-- Title -->
+<div class="space-y-4 text-center">
+<img alt="GF Brain Logo" class="w-28 h-28 object-contain mx-auto" src="assets/logo.png">
+<h1 class="font-headline-lg text-headline-lg md:text-[84px] md:leading-tight font-extrabold tracking-tighter text-on-surface flex items-center justify-center">
+                GF BRAIN
+                <span class="ml-4 w-4 h-4 bg-primary-container inline-block animate-pulse"></span>
+</h1>
+<p class="text-on-surface-variant font-code-block opacity-60 tracking-widest text-sm md:text-base">
+                SUPER AGENT ARCHITECTURE v1.0.0
+</p>
+</div>
+<!-- Loader Area -->
+<div class="glass-panel p-8 w-[500px] max-w-full mx-4">
+<div class="space-y-4">
+<div class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-widest" id="status">Inicializando ambiente...</div>
+<div class="w-full h-1 bg-surface-container-high overflow-hidden">
+<div class="progress-bar" id="bar"></div>
+</div>
+<div class="space-y-2 pt-2" id="tasks">
+<div class="task-item font-code-block text-code-block" id="aws">AWS Authentication</div>
+<div class="task-item font-code-block text-code-block" id="onedrive">OneDrive Access</div>
+<div class="task-item font-code-block text-code-block" id="user">User Profile</div>
+<div class="task-item font-code-block text-code-block" id="kb">Knowledge Base</div>
+<div class="task-item font-code-block text-code-block" id="ai">AI Services</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+<script src="js/particles.js"></script>
+<script src="js/app.js"></script>
+<script src="js/splash.js"></script>
+</body></html>

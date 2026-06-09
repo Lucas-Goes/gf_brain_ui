@@ -1,0 +1,45 @@
+.glass-panel {
+    backdrop-filter: blur(12px);
+    background: rgba(18, 18, 18, 0.8);
+    border: 1px solid #1A1A1A;
+}
+
+.progress-bar {
+    width: 0%;
+    height: 100%;
+    background: #ff6b00;
+    transition: all 0.5s ease;
+}
+
+.task-item {
+    color: #555;
+    transition: 0.3s;
+}
+
+.task-item.running {
+    color: #ffb693;
+}
+
+.task-item.done {
+    color: #22c55e;
+}
+
+.code-fragment {
+    position: absolute;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: rgba(255, 102, 0, 0.08);
+    pointer-events: none;
+    user-select: none;
+    z-index: 5;
+}
+
+.scan-line {
+    width: 100%;
+    height: 2px;
+    background: linear-gradient(to bottom, transparent, rgba(255, 102, 0, 0.05), transparent);
+    position: absolute;
+    top: -100%;
+    animation: scan 12s linear infinite;
+    z-index: 5;
+}
