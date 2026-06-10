@@ -82,7 +82,7 @@
         chatSession.scrollTop = chatSession.scrollHeight;
     }
 
-    function appendAIResponse(text, fontes) {
+    function appendAIResponse(text, fontes, escopo) {
         var msgDiv = document.createElement('div');
         msgDiv.className = "flex flex-col items-start gap-2 max-w-[85%]";
         var id = 'ai-resp-' + Date.now();
@@ -94,14 +94,15 @@
                 }).join('') +
                 '</div>';
         }
+        var escopoLabel = scopeLabelMap[escopo] || escopo;
         msgDiv.innerHTML =
             '<div class="relative pl-6">' +
             '<div class="absolute left-0 top-0 bottom-0 w-[3px] bg-[#ffb696]"></div>' +
             '<div class="p-6 bg-[#1c1b1b] border border-[#ffb696]/30 space-y-4">' +
-            '<div class="flex items-center gap-2 text-primary font-label-caps text-[12px]">' +
+            '<div class="flex items-center gap-2 text-[#ffb696] font-label-caps text-[12px]">' +
             '<span class="material-symbols-outlined text-[14px]" data-icon="security">security</span>' +
-            'PROTOCOL_ANALYSIS_INITIALIZED</div>' +
-            '<div class="text-on-surface font-body-md leading-relaxed overflow-hidden" id="' + id + '"></div>' +
+            'Escopo: ' + escopoLabel + '</div>' +
+            '<div class="text-on-surface font-body-md leading-relaxed overflow-hidden response-content" id="' + id + '"></div>' +
             fontesHtml +
             '</div>' +
             '</div>' +
@@ -114,7 +115,19 @@
         chatSession.scrollTop = chatSession.scrollHeight;
 
         var target = document.getElementById(id);
-        typeWriter(target, text);
+        text = text.replace(/\*\*/g, '');
+        typeWriter(target, text, 20, function () {
+            var html = target.innerHTML;
+            html = html.replace(/```(\w*)\n?([\s\S]*?)```/g, function (m, lang, code) {
+                code = code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                return '<div class="code-block-wrapper">' +
+                    '<button class="copy-code-btn" onclick="copyCode(this)">' +
+                    '<span class="material-symbols-outlined text-[14px]" data-icon="content_copy">content_copy</span>' +
+                    ' Copiar</button>' +
+                    '<pre class="code-snippet"><code>' + code + '</code></pre></div>';
+            });
+            target.innerHTML = html;
+        });
     }
 
     function handleMessageSubmission() {
@@ -142,24 +155,24 @@
         input.value = '';
         document.getElementById('secondary-input').value = '';
         input.style.height = 'auto';
-        appendAIResponse("Pensando...");
+        appendAIResponse("Pensando...", null, escopoAtivo);
 
         var API_URL = 'http://127.0.0.1:8000/chat';
 
         var controller = new AbortController();
-        var timeoutId = setTimeout(function () { controller.abort(); }, 30000);
+        var timeoutId = setTimeout(function () { controller.abort(); }, 60000);
 
         fetch(API_URL, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ pergunta: val }),
+            body: JSON.stringify({ pergunta: val, escopo: escopoAtivo }),
             signal: controller.signal
         })
             .then(function (r) { return r.json(); })
             .then(function (data) {
                 clearTimeout(timeoutId);
                 chatSession.removeChild(chatSession.lastElementChild);
-                appendAIResponse(data.resposta, data.fontes);
+                appendAIResponse(data.resposta, data.fontes, escopoAtivo);
             })
             .catch(function (err) {
                 clearTimeout(timeoutId);
@@ -193,6 +206,14 @@
     });
 
     var scopeBtns = document.querySelectorAll('.scope-btn');
+    var scopeMap = ["codigo", "arquitetura", "documentacao", "automacao"];
+    var scopeLabelMap = {
+        "codigo": "Criar Código",
+        "arquitetura": "Analisar Arquitetura",
+        "documentacao": "Documentação",
+        "automacao": "Automações",
+    };
+    var escopoAtivo = "codigo";
 
     function selectScope(btn) {
         scopeBtns.forEach(function (b) {
@@ -201,6 +222,10 @@
         });
         btn.style.borderColor = '#ff6600';
         btn.style.boxShadow = '0 0 12px rgba(255,102,0,.25)';
+        var idx = Array.prototype.indexOf.call(scopeBtns, btn);
+        if (idx >= 0 && idx < scopeMap.length) {
+            escopoAtivo = scopeMap[idx];
+        }
     }
 
     selectScope(scopeBtns[0]);
@@ -227,6 +252,19 @@
     });
 
     rotatePlaceholderTypewriter();
+
+    window.copyCode = function (btn) {
+        var pre = btn.parentElement.querySelector('.code-snippet code');
+        if (!pre) return;
+        var text = pre.textContent;
+        navigator.clipboard.writeText(text).then(function () {
+            var icon = btn.querySelector('.material-symbols-outlined');
+            icon.textContent = 'check';
+            var orig = btn.innerHTML;
+            btn.innerHTML = '<span class="material-symbols-outlined text-[14px]" data-icon="check">check</span> Copiado!';
+            setTimeout(function () { btn.innerHTML = orig; }, 2000);
+        });
+    };
 
     window.copyMsg = function (btn) {
         var container = btn.closest('.items-start');

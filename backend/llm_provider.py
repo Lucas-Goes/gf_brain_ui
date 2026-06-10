@@ -13,7 +13,7 @@ class OpenAIProvider(LLMProvider):
 
     def __init__(self, api_key, base_url, model):
         from openai import OpenAI
-        self.client = OpenAI(api_key=api_key, base_url=base_url, timeout=30.0, max_retries=1)
+        self.client = OpenAI(api_key=api_key, base_url=base_url, timeout=60.0, max_retries=1)
         self.model = model
 
     def generate(self, prompt, temperature=0.0, max_tokens=500, system_prompt=""):

@@ -1,12 +1,102 @@
-import chromadb
-from sentence_transformers import SentenceTransformer
-
 from backend.config import (
-    NVIDIA_API_KEY, CHROMA_DB_PATH, LLM_MODEL, LLM_BASE_URL, TERMOS_CRITICOS,
-    LLM_PROVIDER, AWS_PROFILE, AWS_REGION, BEDROCK_MODEL_ID, AWS_CA_BUNDLE,
-    HTTP_PROXY, HTTPS_PROXY,
+    NVIDIA_API_KEY, LLM_MODEL, LLM_BASE_URL, TERMOS_CRITICOS,
+    LLM_PROVIDER, AWS_PROFILE, AWS_REGION, BEDROCK_MODEL_ID,
 )
 from backend.llm_provider import create_provider
+from backend.kb.client import query_knowledge as kb_query
+from backend.agent.prompts import get_system_prompt, get_kb_filter
+
+SAUDACOES = [
+    "oi", "ola", "olá", "oie", "ooi", "bom dia", "boa tarde", "boa noite",
+    "opa", "fala", "falae", "e aí", "eai", "hey", "hello", "hi",
+]
+CAPABILITIES = [
+    "o que voce sabe", "o que voce faz", "o que voce pode",
+    "quem é voce", "quem e voce", "como funciona",
+    "me ajuda", "pode me ajudar", "sabe fazer", "consegue fazer",
+    "o que sabe", "capacidades", "habilidades",
+]
+AGRADECIMENTOS = [
+    "obrigado", "obrigada", "valeu", "brigado", "brigada",
+    "thanks", "thank you", "valeu", "tmj",
+]
+
+SCOPE_INTRO_RESPONSES = {
+    "codigo": (
+        "Sou o **GF Brain** no modo **Criar Código**\\. Posso analisar os padrões do projeto "
+        "e sugerir implementações de Glue jobs, tabelas Athena, pipelines e muito mais\\.\n\n"
+        "**Exemplos do que posso fazer:**\n"
+        "• Sugerir a estrutura de um job Glue seguindo os padrões do projeto\n"
+        "• Indicar colunas importantes para tabelas (dt\\_foto, id\\_segmento, etc\\.)\n"
+        "• Gerar código com logging e conceito Athena First\n"
+        "• Revisar código existente e apontar melhorias\n\n"
+        "Sobre o que você gostaria de criar?"
+    ),
+    "arquitetura": (
+        "Sou o **GF Brain** no modo **Analisar Arquitetura**\\. Posso analisar a arquitetura "
+        "dos processos e fluxos de dados com base nos padrões documentados do projeto\\.\n\n"
+        "**Exemplos do que posso fazer:**\n"
+        "• Explicar o fluxo completo de cadastro de clientes/agências/órgãos\n"
+        "• Detalhar a arquitetura de processamento dos segmentos (PF/PJ)\n"
+        "• Analisar dependências entre bases e jobs\n"
+        "• Sugerir melhorias de escalabilidade e manutenibilidade\n\n"
+        "Qual área da arquitetura você quer explorar?"
+    ),
+    "documentacao": (
+        "Sou o **GF Brain** no modo **Documentação**\\. Consulto a base de conhecimento "
+        "para responder suas perguntas com o máximo de detalhes e fontes\\.\n\n"
+        "**Exemplos do que posso fazer:**\n"
+        "• Explicar regras de negócio dos segmentos (IA, IU, PF, PJ, etc\\.)\n"
+        "• Detalhar processos de cadastro de órgãos, agências e clientes\n"
+        "• Esclarecer dúvidas sobre fluxos e validações\n"
+        "• Buscar informações específicas na documentação disponível\n\n"
+        "O que você gostaria de saber?"
+    ),
+    "automacao": (
+        "Sou o **GF Brain** no modo **Automações**\\. Posso executar tarefas "
+        "no seu computador usando as ferramentas disponíveis\\.\n\n"
+        "**Exemplos do que posso fazer:**\n"
+        "• Abrir o Notepad e escrever um poema na área de trabalho\n"
+        "• Criar arquivos e pastas automatizados\n"
+        "• Executar comandos e processos\n\n"
+        "O que você quer automatizar?"
+    ),
+}
+
+
+ACENTOS = str.maketrans({
+    "á": "a", "à": "a", "â": "a", "ã": "a",
+    "é": "e", "ê": "e",
+    "í": "i",
+    "ó": "o", "ô": "o", "õ": "o",
+    "ú": "u",
+    "ç": "c",
+})
+
+
+def _normalizar(texto):
+    return texto.lower().strip().strip(".,;:!?").translate(ACENTOS)
+
+
+def _detectar_saudacao(texto):
+    t = _normalizar(texto)
+
+    for padrao in SAUDACOES:
+        if t == padrao or t.startswith(padrao):
+            return "saudacao"
+        if len(padrao) > 2 and padrao in t:
+            return "saudacao"
+
+    for padrao in CAPABILITIES:
+        if padrao in t:
+            return "capability"
+
+    for padrao in AGRADECIMENTOS:
+        if padrao in t:
+            return "agradecimento"
+
+    return None
+
 
 STOP_WORDS = {
     "qual", "a", "o", "as", "os", "e", "de", "da", "do", "das", "dos",
@@ -32,12 +122,6 @@ def _extrair_palavras_chave(texto):
             palavras.add(p)
     return palavras
 
-embedding_model = SentenceTransformer(
-    "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
-)
-
-client_db = chromadb.PersistentClient(path=CHROMA_DB_PATH)
-collection = client_db.get_collection("knowledge")
 
 llm = create_provider({
     "LLM_PROVIDER": LLM_PROVIDER,
@@ -50,6 +134,7 @@ llm = create_provider({
 })
 
 historico = []
+_pendente_automacao = None
 
 SEPARADOR = "=" * 100
 
@@ -61,6 +146,161 @@ def extrair_termos_criticos(pergunta):
         if termo in pergunta_upper:
             encontrados.append(termo)
     return encontrados
+
+
+def _listar_ferramentas_texto(tools_dict):
+    if not tools_dict:
+        return "Nenhuma ferramenta de automação disponível no momento."
+    linhas = []
+    for nome, cls in tools_dict.items():
+        linhas.append(f"• **{nome}**: {cls.description}")
+    return "\n".join(linhas)
+
+
+def _executar_ferramenta(nome, params, tools):
+    import json
+    try:
+        resultado = tools[nome]()
+        retorno = resultado.run(params)
+        msg = retorno.get("mensagem", retorno.get("message", json.dumps(retorno, indent=2)))
+        arquivo = retorno.get("arquivo", "")
+        if arquivo:
+            return (
+                f"**Ferramenta executada com sucesso!**\n\n"
+                f"{msg}\n\n"
+                f"📄 Arquivo salvo em: `{arquivo}`"
+            )
+        return f"**Ferramenta executada com sucesso!**\n\n{msg}"
+    except Exception as e:
+        return f"**Erro ao executar a ferramenta:** {str(e)}"
+
+
+def _processar_automacao(pergunta, llm):
+    import re
+    from backend.tools import discover_tools
+
+    global _pendente_automacao
+
+    tools = discover_tools()
+
+    confirmacao = ("sim", "pode", "ok", "vai", "executa", "confirmo", "pode ir", "pode executar",
+                   "manda ver", "vai la", "bora", "vamos", "pode sim")
+    recusa = ("nao", "não", "pare", "cancela", "nada", "depois", "agora nao", "nao quero",
+              "não quero", "nem pensar", "para", "cancela isso")
+
+    t = pergunta.lower()
+
+    if _pendente_automacao is not None:
+        if any(p in t for p in confirmacao):
+            nome, params = _pendente_automacao
+            _pendente_automacao = None
+            print(f"[AUTOMACAO] Confirmado! Executando: {nome}")
+            if nome in tools:
+                return _executar_ferramenta(nome, params, tools)
+            else:
+                return f"A ferramenta **{nome}** não está mais disponível."
+        elif any(p in t for p in recusa):
+            _pendente_automacao = None
+            return "Execução cancelada. Se quiser tentar outra automação, é só pedir!"
+        else:
+            return (
+                f"Você tem uma automação pendente: **{_pendente_automacao[0]}**. "
+                f"Deseja confirmar a execução? (sim/não)"
+            )
+
+    system_prompt = f"""Você está no modo **Automação** do GF Brain e NÃO é um assistente generativo.
+
+Ferramentas disponíveis:
+{_listar_ferramentas_texto(tools)}
+
+REGRAS ABSOLUTAS:
+1. NUNCA escreva poemas, textos criativos, códigos ou qualquer conteúdo que uma ferramenta deveria gerar.
+2. Quando o usuário pedir para CRIAR/GERAR/FAZER algo que uma ferramenta faz, NÃO faça o trabalho da ferramenta. Em vez disso, use [EXECUTAR:nome] no final da sua resposta.
+3. Se o usuário pedir informações sobre uma ferramenta, apenas explique o que ela faz — sem executar.
+4. Se o usuário perguntar sobre capacidades, liste as ferramentas.
+5. IMPORTANTE: SEMPRE complete as frases. Nunca pare no meio de uma frase ou raciocínio. Formate a resposta em tópicos ou bullet points sempre que possível. NÃO use asteriscos ** para negrito.
+
+EXEMPLOS:
+Usuário: "crie um poema sobre natureza"
+Você: Vou criar o poema usando o gerador! [EXECUTAR:gerador_de_poema:Um poema sobre a natureza]
+
+Usuário: "faça um poema romântico"
+Você: Claro, vou executar o gerador de poemas! [EXECUTAR:gerador_de_poema:Um poema romântico]
+
+Usuário: "do que se trata essa ferramenta de poema?"
+Você: A ferramenta gerador_de_poema cria um poema personalizado e salva no Desktop.
+
+Usuário: "oque voce sabe fazer?"
+Você: Tenho a ferramenta gerador_de_poema que cria poemas personalizados.
+
+NUNCA gere o conteúdo que a ferramenta deveria produzir. Sempre use [EXECUTAR:nome] nesses casos."""
+
+    print(f"[AUTOMACAO] Enviando para o LLM (max_tokens=300)...")
+    try:
+        resposta = llm.generate(
+            prompt=pergunta,
+            temperature=0.3,
+            max_tokens=300,
+            system_prompt=system_prompt,
+        )
+        print(f"[AUTOMACAO] Resposta do LLM recebida ({len(resposta)} chars)")
+    except Exception as e:
+        print(f"[AUTOMACAO] Erro no LLM: {e}")
+        return _formatar_capacidades_automacao(tools)
+
+    match = re.search(r'\[EXECUTAR:(\w+)(?::(.+?))?\]', resposta, re.DOTALL)
+    if match:
+        nome = match.group(1)
+        conteudo = match.group(2).strip() if match.group(2) else None
+        resposta = resposta.replace(match.group(0), "").strip()
+        if nome in tools:
+            params = {}
+            if conteudo:
+                params["conteudo"] = conteudo
+            _pendente_automacao = (nome, params)
+            print(f"[AUTOMACAO] Marcador EXECUTAR detectado: {nome} params={params}")
+            return resposta
+        else:
+            return (
+                f"{resposta}\n\n"
+                f"(A ferramenta **{nome}** não foi encontrada. "
+                f"Disponíveis: {', '.join(tools.keys())})"
+            )
+
+    return resposta
+
+
+def _formatar_capacidades_automacao(tools):
+    nomes = list(tools.keys())
+    if not nomes:
+        return "Nenhuma ferramenta de automação disponível no momento."
+
+    linhas = []
+    for i, nome in enumerate(tools):
+        if i >= 3:
+            break
+        cls = tools[nome]
+        linhas.append(f"• **{nome}**: {cls.description}")
+
+    texto = (
+        "Meu escopo de **Automações** permite executar tarefas pré-definidas "
+        "e determinísticas chamadas **ferramentas**.\n\n"
+        f"Atualmente tenho {len(tools)} ferramenta(s) disponível(is):\n\n"
+        + "\n".join(linhas)
+    )
+
+    if len(tools) > 3:
+        texto += (
+            f"\n\nE mais {len(tools) - 3} outra(s). "
+            f"Digite **\"todas as ferramentas\"** para ver a lista completa."
+        )
+
+    texto += (
+        "\n\nSe nenhuma atender o que você precisa, você mesmo pode criar novas ferramentas! "
+        "É só digitar **\"como criar uma ferramenta\"** que eu explico o passo a passo.\n\n"
+        "Qual delas você gostaria de executar?"
+    )
+    return texto
 
 
 def reformular_pergunta(pergunta_atual, historico):
@@ -105,15 +345,62 @@ PERGUNTA ATUAL:
     return reformulada
 
 
-def responder(pergunta_original):
+def responder(pergunta_original, escopo="documentacao"):
     global historico
 
     print(f"\n{SEPARADOR}")
-    print(f"CHAT INICIADO")
+    print(f"CHAT INICIADO | escopo={escopo}")
     print(f"{SEPARADOR}")
     print(f"Pergunta original: {pergunta_original}")
 
-    pergunta = reformular_pergunta(pergunta_original, historico)
+    intent = _detectar_saudacao(pergunta_original)
+    if intent:
+        print(f"[INTENT] Detectado: {intent}")
+        if intent == "agradecimento":
+            resposta = "Por nada! Se precisar de mais alguma coisa, é só chamar."
+        else:
+            resposta = SCOPE_INTRO_RESPONSES.get(escopo, SCOPE_INTRO_RESPONSES["documentacao"])
+        historico.append({"pergunta": pergunta_original, "resposta": resposta})
+        historico = historico[-10:]
+        print(f"{SEPARADOR}\n")
+        return {"resposta": resposta, "fontes": []}
+
+    if escopo == "automacao" and _pendente_automacao is not None:
+        print(f"[AUTOMACAO] Confirmacao pendente detectada")
+        resposta = _processar_automacao(pergunta_original, llm)
+        historico.append({"pergunta": pergunta_original, "resposta": resposta})
+        historico = historico[-10:]
+        print(f"{SEPARADOR}\n")
+        return {"resposta": resposta, "fontes": []}
+
+    if escopo == "automacao":
+        pergunta = pergunta_original
+    else:
+        try:
+            pergunta = reformular_pergunta(pergunta_original, historico)
+        except Exception as e:
+            print(f"[REFORMULAR] Erro: {e}")
+            pergunta = pergunta_original
+
+    intent_pos = _detectar_saudacao(pergunta)
+    if intent_pos:
+        print(f"[INTENT] Detectado (pos-reformulacao): {intent_pos}")
+        if intent_pos == "agradecimento":
+            resposta = "Por nada! Se precisar de mais alguma coisa, é só chamar."
+        else:
+            resposta = SCOPE_INTRO_RESPONSES.get(escopo, SCOPE_INTRO_RESPONSES["documentacao"])
+        historico.append({"pergunta": pergunta_original, "resposta": resposta})
+        historico = historico[-10:]
+        print(f"{SEPARADOR}\n")
+        return {"resposta": resposta, "fontes": []}
+
+    if escopo == "automacao":
+        print(f"\n[AUTOMACAO] Processando no escopo automacao...")
+        resposta = _processar_automacao(pergunta_original, llm)
+        historico.append({"pergunta": pergunta_original, "resposta": resposta})
+        historico = historico[-10:]
+        print(f"{SEPARADOR}\n")
+        return {"resposta": resposta, "fontes": []}
 
     print(f"\n[TERMOS] Buscando termos criticos...")
     termos_criticos = extrair_termos_criticos(pergunta)
@@ -122,14 +409,13 @@ def responder(pergunta_original):
     else:
         print(f"[TERMOS] Nenhum termo critico encontrado")
 
-    print(f"\n[EMBEDDING] Gerando embedding da pergunta...")
-    pergunta_embedding = embedding_model.encode(pergunta).tolist()
+    system_prompt = get_system_prompt(escopo)
+    kb_filter = get_kb_filter(escopo)
+
+    print(f"\n[ESCOPO] '{escopo}' -> filtro KB: {kb_filter}")
 
     print(f"[CHROMA] Consultando base de conhecimento...")
-    results = collection.query(
-        query_embeddings=[pergunta_embedding],
-        n_results=10
-    )
+    results = kb_query(pergunta, n_results=10, where_filter=kb_filter)
 
     docs = results["documents"][0]
     metas = results["metadatas"][0]
@@ -188,21 +474,29 @@ def responder(pergunta_original):
     for f in fontes:
         print(f"  - {f}")
 
-    prompt = f"""
-Contexto extraido da base de conhecimento:
+    prompt = f"""Contexto extraido da base de conhecimento:
 {contexto}
 
 Com base no contexto acima, responda a pergunta abaixo.
 Se o contexto nao contiver a resposta, escreva exatamente:
 Nao encontrei essa informacao na documentacao disponivel.
-
+Formate a resposta em topicos ou bullet points sempre que possivel.
+ 
 PERGUNTA: {pergunta}
-
+ 
 RESPOSTA:"""
 
-    print(f"\n[LLM] Consultando {LLM_PROVIDER}...")
+    max_tokens_map = {"codigo": 1200, "arquitetura": 800, "documentacao": 800}
+    max_tok = max_tokens_map.get(escopo, 800)
+
+    print(f"\n[LLM] Consultando {LLM_PROVIDER} | escopo={escopo} | max_tokens={max_tok}...")
     try:
-        resposta = llm.generate(prompt=prompt, temperature=0.0, max_tokens=500)
+        resposta = llm.generate(
+            prompt=prompt,
+            temperature=0.0,
+            max_tokens=max_tok,
+            system_prompt=system_prompt,
+        )
         print(f"[LLM] Resposta recebida ({len(resposta)} caracteres)")
     except Exception as e:
         resposta = f"Erro ao consultar a IA: {str(e)}"
@@ -210,7 +504,7 @@ RESPOSTA:"""
 
     historico.append({
         "pergunta": pergunta_original,
-        "resposta": resposta
+        "resposta": resposta,
     })
 
     historico = historico[-10:]

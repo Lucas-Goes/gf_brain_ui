@@ -48,37 +48,63 @@
         setTimeout(function () {
             document.getElementById('intro').style.display = 'none';
             document.getElementById('main-content').classList.remove('opacity-0');
-            setTimeout(nextStep, 1000);
+            setTimeout(runChecks, 1000);
         }, 700);
     }, 8000);
 
     var steps = [
-        { id: "aws", status: "Validando credenciais AWS...", progress: 20, check: function () { return new Promise(function (r) { setTimeout(r, 1500); }); } },
-        { id: "onedrive", status: "Verificando acesso OneDrive...", progress: 40, check: function () { return new Promise(function (r) { setTimeout(r, 1500); }); } },
-        { id: "user", status: "Identificando usuário...", progress: 60, check: function () { return new Promise(function (r) { setTimeout(r, 1500); }); } },
-        { id: "kb", status: "Carregando base de conhecimento...", progress: 80, check: function () { return new Promise(function (r) { setTimeout(r, 1500); }); } },
-        { id: "ai", status: "Inicializando motores de IA...", progress: 100, check: function () { return new Promise(function (r) { setTimeout(r, 1500); }); } }
+        { id: "aws", status: "Validando credenciais AWS...", progress: 20 },
+        { id: "onedrive", status: "Verificando acesso OneDrive...", progress: 40 },
+        { id: "user", status: "Identificando usuário...", progress: 60 },
+        { id: "kb", status: "Carregando base de conhecimento...", progress: 80 },
+        { id: "ai", status: "Inicializando motores de IA...", progress: 100 }
     ];
 
     var current = 0;
 
-    function nextStep() {
-        if (current >= steps.length) {
-            document.getElementById("status").innerHTML = "Sistema pronto.";
-            try { pywebview.api.splash_done(); } catch (e) { }
-            return;
+    function atualizarStep(stepId, status, data) {
+        var el = document.getElementById(stepId);
+        if (!el) return;
+        el.classList.remove("running");
+        if (status === "ok") {
+            el.classList.add("done");
+            var extra = data ? " (" + (data.usuario || data.profile || data.colecao || data.provider || "") + ")" : "";
+            el.innerHTML = el.dataset.label || stepId + extra;
+        } else {
+            el.classList.add("fail");
         }
+    }
 
+    function runChecks() {
+        fetch("http://127.0.0.1:8000/api/checks")
+            .then(function (r) { return r.json(); })
+            .then(function (results) {
+                results.forEach(function (check) {
+                    atualizarStep(check.id, check.status, check.data);
+                });
+                document.getElementById("status").innerHTML = "Sistema pronto.";
+                try { pywebview.api.splash_done(); } catch (e) { }
+            })
+            .catch(function (err) {
+                console.error("Checks error:", err);
+                document.getElementById("status").innerHTML = "Erro nas verificacoes, carregando fallback...";
+                try { pywebview.api.splash_done(); } catch (e) { }
+            });
+    }
+
+    function nextStep() {
+        if (current >= steps.length) return;
         var step = steps[current];
         document.getElementById("status").innerHTML = step.status;
-        document.getElementById(step.id).classList.add("running");
+        var el = document.getElementById(step.id);
+        if (el) {
+            el.dataset.label = el.innerHTML;
+            el.classList.add("running");
+        }
         document.getElementById("bar").style.width = step.progress + "%";
-
-        step.check().then(function () {
-            document.getElementById(step.id).classList.remove("running");
-            document.getElementById(step.id).classList.add("done");
-            current++;
-            nextStep();
-        });
+        current++;
+        setTimeout(nextStep, 400);
     }
+
+    nextStep();
 })();

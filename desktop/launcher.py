@@ -1,4 +1,6 @@
 import os
+import subprocess
+import sys
 import threading
 import time
 import urllib.request
@@ -6,6 +8,27 @@ import webview
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SERVER_URL = "http://127.0.0.1:8000"
+
+
+def kill_port(port):
+    try:
+        out = subprocess.check_output(f"netstat -ano | findstr :{port}", shell=True).decode()
+        for line in out.strip().splitlines():
+            parts = line.split()
+            if len(parts) >= 5 and "LISTENING" in line:
+                pid = parts[-1]
+                os.system(f"taskkill /F /PID {pid} >nul 2>&1")
+                print(f"[GF Brain] Processo antigo na porta {port} encerrado (PID {pid})")
+    except Exception:
+        pass
+
+
+def start_server():
+    kill_port(8000)
+    subprocess.Popen(
+        [sys.executable, "-m", "uvicorn", "backend.api:app", "--host", "127.0.0.1", "--port", "8000", "--reload"],
+        cwd=BASE_DIR,
+    )
 
 
 class Api:
@@ -24,13 +47,18 @@ class Api:
 api = Api()
 
 
-def wait_for_server(url, timeout=30):
+def wait_for_server(url, timeout=90):
     start = time.time()
+    last_print = 0
     while time.time() - start < timeout:
         try:
             urllib.request.urlopen(url, timeout=2).close()
             return True
         except Exception:
+            elapsed = time.time() - start
+            if elapsed - last_print >= 5:
+                print(f"[GF Brain] Aguardando servidor... ({int(elapsed)}s)")
+                last_print = elapsed
             time.sleep(0.5)
     return False
 
@@ -62,6 +90,8 @@ splash = webview.create_window(
     frameless=True,
     background_color="#0A0A0A"
 )
+
+start_server()
 
 threading.Thread(
     target=startup,
